@@ -10,26 +10,26 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from dotenv import load_dotenv
-load_dotenv()
 from langchain_openai import ChatOpenAI
 
-st.set_page_config(page_title="Free AI Document Summarizer", page_icon="📄")
-st.title("📄 Free AI Document Summarizer")
+st.set_page_config(page_title="DocQnA", page_icon="📄")
+st.title("📄 DocQnA: Free AI Document Summarizer")
 st.write("Upload a PDF to save it to the database, then ask questions about it!")
 
-# --- 1. Load API Keys from Environment ---
+# API Key Setup
+load_dotenv()
 hf_api_key = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
 pinecone_api_key = os.environ.get("PINECONE_API_KEY")
 index_name = os.environ.get("PINECONE_INDEX_NAME", "doc-summary-hf")
 
 if not hf_api_key or not pinecone_api_key:
-    st.error("⚠️ API keys not found! Please set HF_TOKEN and PINECONE_API_KEY in your server environment.")
+    st.error("API keys not found! Please set HF_TOKEN and PINECONE_API_KEY in your server environment.")
     st.stop()
 
 os.environ["HF_TOKEN"] = hf_api_key
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_api_key
 
-# --- 2. File Upload & Processing ---
+# File upload and processing
 uploaded_file = st.file_uploader("Upload a PDF document", type="pdf")
 
 if st.button("Process & Save to Pinecone"):
@@ -52,7 +52,7 @@ if st.button("Process & Save to Pinecone"):
                 pc = Pinecone(api_key=pinecone_api_key)
 
                 if index_name not in pc.list_indexes().names():
-                    st.info("Creating new Pinecone index (this takes about 60 seconds)...")
+                    st.info("Creating new Pinecone index (this might take a minute)...")
                     pc.create_index(
                         name=index_name,
                         dimension=384,
@@ -69,8 +69,8 @@ if st.button("Process & Save to Pinecone"):
 
 st.divider()
 
-# --- 3. Chat Interface ---
-st.subheader("Chat with your Document")
+# Chat interface
+st.subheader("Document Q&A")
 user_query = st.text_input("Ask a question about your uploaded document:")
 
 if st.button("Ask"):
@@ -83,7 +83,6 @@ if st.button("Ask"):
                 vectorstore = PineconeVectorStore(index_name=index_name, embedding=embeddings)
                 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
-                # THE FIX: Point the standard OpenAI wrapper EXACTLY at Hugging Face's root v1 router
                 llm = ChatOpenAI(
                     model="Qwen/Qwen2.5-72B-Instruct",
                     base_url="https://router.huggingface.co/v1",
@@ -96,7 +95,9 @@ if st.button("Ask"):
                     "You are an assistant for question-answering tasks. "
                     "Use the following pieces of retrieved context to answer the question. "
                     "If you don't know the answer, say that you don't know. "
-                    "Use three sentences maximum and keep the answer concise.\n\n"
+                    "Use three sentences maximum and keep the answer concise,"
+                    "unless you are asked to provide a detailed answer."
+                    "Do not exceed 300 words in any situation.\n\n"
                     "{context}"
                 )
 
