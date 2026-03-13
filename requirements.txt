@@ -1,0 +1,14 @@
+python-dotenv
+langchain-core
+langchain-text-splitters
+streamlit>=1.32.0
+pinecone-client>=3.2.2
+langchain>=0.2.0
+langchain-huggingface>=0.0.3
+langchain-pinecone>=0.0.3
+langchain-community>=0.2.0
+langchain-classic>=1.0.0
+langchain-openai>=0.1.0
+pypdf>=4.1.0
+sentence-transformers>=2.6.1
+huggingface_hub>=0.23.0
