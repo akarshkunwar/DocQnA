@@ -15,6 +15,7 @@ from langchain_openai import ChatOpenAI
 st.set_page_config(page_title="DocQnA", page_icon="📄")
 st.title("📄 DocQnA: Free AI Document Summarizer")
 st.write("Upload a PDF to save it to the database, then ask questions about it!")
+st.caption("⚠️ :gray[Do not upload any sensitive documents as this app is deployed over HTTP. Coming soon over HTTPS.]")
 
 # API Key Setup
 load_dotenv()
