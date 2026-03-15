@@ -38,7 +38,7 @@ os.environ["HF_TOKEN"] = hf_api_key
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_api_key
 
 # --- 2. File Upload & Processing ---
-uploaded_file = st.file_uploader("Upload a PDF document", type="pdf")
+uploaded_file = st.file_uploader("Upload a PDF document", type="pdf", max_upload_size=50)  # 50 MB limit
 
 if st.button("Process & Save to Pinecone"):
     if not uploaded_file:
