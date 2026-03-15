@@ -9,28 +9,35 @@ from langchain_pinecone import PineconeVectorStore
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+
 from dotenv import load_dotenv
+load_dotenv()
+# THE FIX: We use the OpenAI chat wrapper instead!
 from langchain_openai import ChatOpenAI
+import uuid
 
 st.set_page_config(page_title="DocQnA", page_icon="📄")
+
+# Create a unique ID for this user's session to prevent data contamination
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
 st.title("📄 DocQnA: Free AI Document Summarizer")
 st.write("Upload a PDF to save it to the database, then ask questions about it!")
-st.caption("⚠️ :gray[Do not upload any sensitive documents as this app is deployed over HTTP. Coming soon over HTTPS.]")
 
-# API Key Setup
-load_dotenv()
+# --- 1. Load API Keys from Environment ---
 hf_api_key = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
 pinecone_api_key = os.environ.get("PINECONE_API_KEY")
 index_name = os.environ.get("PINECONE_INDEX_NAME", "doc-summary-hf")
 
 if not hf_api_key or not pinecone_api_key:
-    st.error("API keys not found! Please set HF_TOKEN and PINECONE_API_KEY in your server environment.")
+    st.error("⚠️ API keys not found! Please set HF_TOKEN and PINECONE_API_KEY in your server environment.")
     st.stop()
 
 os.environ["HF_TOKEN"] = hf_api_key
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = hf_api_key
 
-# File upload and processing
+# --- 2. File Upload & Processing ---
 uploaded_file = st.file_uploader("Upload a PDF document", type="pdf")
 
 if st.button("Process & Save to Pinecone"):
@@ -53,7 +60,7 @@ if st.button("Process & Save to Pinecone"):
                 pc = Pinecone(api_key=pinecone_api_key)
 
                 if index_name not in pc.list_indexes().names():
-                    st.info("Creating new Pinecone index (this might take a minute)...")
+                    st.info("Creating new Pinecone index (this takes about 60 seconds)...")
                     pc.create_index(
                         name=index_name,
                         dimension=384,
@@ -61,7 +68,16 @@ if st.button("Process & Save to Pinecone"):
                         spec=ServerlessSpec(cloud="aws", region="us-east-1")
                     )
 
-                PineconeVectorStore.from_documents(chunks, embeddings, index_name=index_name)
+                # --- NEW FIX: Clear old documents in this user's namespace before uploading new one ---
+                index = pc.Index(index_name)
+                try:
+                    index.delete(delete_all=True, namespace=st.session_state.session_id)
+                except Exception:
+                    # Ignore if the namespace doesn't exist or is already empty
+                    pass
+
+                PineconeVectorStore.from_documents(chunks, embeddings, index_name=index_name,
+                                                   namespace=st.session_state.session_id)
                 st.success("✅ Document processed and saved to Pinecone successfully!")
             except Exception as e:
                 st.error(f"An error occurred: {e}")
@@ -70,8 +86,8 @@ if st.button("Process & Save to Pinecone"):
 
 st.divider()
 
-# Chat interface
-st.subheader("Document Q&A")
+# --- 3. Chat Interface ---
+st.subheader("Document QnA")
 user_query = st.text_input("Ask a question about your uploaded document:")
 
 if st.button("Ask"):
@@ -82,8 +98,9 @@ if st.button("Ask"):
             try:
                 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
                 vectorstore = PineconeVectorStore(index_name=index_name, embedding=embeddings)
-                retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+                retriever = vectorstore.as_retriever(search_kwargs={"k": 3, "namespace": st.session_state.session_id})
 
+                # THE FIX: Point the standard OpenAI wrapper EXACTLY at Hugging Face's root v1 router
                 llm = ChatOpenAI(
                     model="Qwen/Qwen2.5-72B-Instruct",
                     base_url="https://router.huggingface.co/v1",
@@ -116,3 +133,25 @@ if st.button("Ask"):
                 st.write(response["answer"])
             except Exception as e:
                 st.error(f"Failed to generate answer: {e}")
+
+st.markdown(
+    """
+    <style>
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        background-color: transparent;
+        color: #888888;
+        text-align: center;
+        font-size: 0.8rem;
+        padding: 10px;
+    }
+    </style>
+    <div class="footer">
+        Secured with Cloudflare Origin CA • <b>Now over HTTPS</b>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
